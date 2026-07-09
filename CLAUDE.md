@@ -8,13 +8,6 @@ A Roblox survival game built with [Rojo](https://rojo.space) for filesystem-to-S
 
 This project is a procedural survival game designed to feel unique every run through a controlled randomness system. Instead of fully random generation, each session is driven by a single seed that determines a cohesive world identity, including map layout, color palette, enemy behaviors, object functions, and environmental rules. The game uses a modular asset approach, where a small set of reusable objects (such as crates, barrels, furniture, and structures) are built using a limited grayscale-based color system with defined roles (primary, secondary, accent, detail, and danger). These roles are dynamically recolored at runtime using generated palettes, allowing the same assets to appear visually distinct across runs. Gameplay variation is achieved through layered modifiers that alter object behavior, enemy attributes, and world mechanics (e.g., low gravity, darkness, or reactive environments), ensuring each playthrough introduces new interactions and strategies. The result is a system-driven experience where a minimal asset set produces high variability, strong visual identity, and emergent gameplay without requiring large amounts of handcrafted content.
 
-Defualt model color:
-Primary   = Color3.fromRGB(191, 191, 191) (light gray)
-Secondary = Color3.fromRGB(128, 128, 128) (mid gray)
-Accent    = Color3.fromRGB(64, 64, 64)    (dark gray)
-Detail    = Color3.fromRGB(230, 230, 230) (almost white)
-Danger    = Color3.fromRGB(255, 0, 255)   (pure magenta)
-
 ## Commands
 
 ```bash

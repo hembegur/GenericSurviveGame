@@ -13,7 +13,9 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local ThemePalette = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ThemePalette"))
+local ThemePalette = require(
+	ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Modules"):WaitForChild("Game"):WaitForChild("ThemePalette")
+)
 
 local TRUNK_MATERIALS = { Enum.Material.Wood, Enum.Material.WoodPlanks, Enum.Material.Slate, Enum.Material.Concrete }
 local LEAF_MATERIALS = { Enum.Material.Grass, Enum.Material.LeafyGrass, Enum.Material.SmoothPlastic, Enum.Material.Sand }
@@ -65,7 +67,7 @@ function Tree.Generate(self: Tree): Model
 	local crookedness = rng:NextNumber(0, 0.14)
 	local branchiness = rng:NextInteger(2, 3)
 	local maxDepth = rng:NextInteger(1, 2)
-	local leafBaseSize = rng:NextNumber(3.5, 8)
+	local leafBaseSize = rng:NextNumber(4.5, 8)
 	local leafShape = if rng:NextNumber() < 0.7 then Enum.PartType.Ball else Enum.PartType.Block
 	local leafMaterial = LEAF_MATERIALS[rng:NextInteger(1, #LEAF_MATERIALS)]
 	local trunkMaterial = TRUNK_MATERIALS[rng:NextInteger(1, #TRUNK_MATERIALS)]
