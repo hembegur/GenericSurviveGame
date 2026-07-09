@@ -15,9 +15,9 @@ export type Biome = {
 
 local TerrainConfig = {}
 
-TerrainConfig.CellSize = 4 -- studs per grid cell on X/Z
+TerrainConfig.CellSize = 10 -- studs per grid cell on X/Z
 TerrainConfig.HeightStep = 2 -- cell heights snap to multiples of this so neighbours can merge
-TerrainConfig.GridRadius = 64 -- cells from center to edge → map spans 512x512 studs
+TerrainConfig.GridRadius = 40 -- cells from center to edge → map spans ... studs
 TerrainConfig.BaseHeight = 40 -- world Y that terrain undulates around
 TerrainConfig.MinThickness = 6 -- ground extends at least this far below the lowest cell
 
@@ -50,7 +50,7 @@ TerrainConfig.Biomes = {
 	{
 		Name = "Highlands",
 		Threshold = 0.25,
-		Amplitude = 30,
+		Amplitude = 50,
 		Roughness = 3,
 		Role = "Accent",
 		Material = Enum.Material.Slate,

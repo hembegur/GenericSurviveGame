@@ -10,6 +10,7 @@ local Classes = script.Parent.Parent:WaitForChild("Classes")
 
 local Registry: { [string]: any } = {
 	Tree = require(Classes:WaitForChild("Tree")) :: any,
+	Building = require(Classes:WaitForChild("Building")) :: any,
 }
 
 local SpawnService = {}
