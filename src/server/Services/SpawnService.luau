@@ -1,16 +1,16 @@
 --!strict
 -- Spawns and tracks world objects (trees, and later rocks, buildings, ...).
--- To add a new spawnable type, put its class in Server.Classes and register it
--- in the Registry below. A class must implement:
+-- To add a new spawnable type, put its class in Server.Classes.World and
+-- register it in the Registry below. A class must implement:
 --   .new(seed: number?)          → object
 --   :Generate()                  → Model (unparented, pivot at its base)
 --   :Destroy()                   → cleans up the object and its model
 
-local Classes = script.Parent.Parent:WaitForChild("Classes")
+local WorldClasses = script.Parent.Parent:WaitForChild("Classes"):WaitForChild("World")
 
 local Registry: { [string]: any } = {
-	Tree = require(Classes:WaitForChild("Tree")) :: any,
-	Building = require(Classes:WaitForChild("Building")) :: any,
+	Tree = require(WorldClasses:WaitForChild("Tree")) :: any,
+	Building = require(WorldClasses:WaitForChild("Building")) :: any,
 }
 
 local SpawnService = {}

@@ -82,7 +82,7 @@ function Building.Generate(self: Building): Model
 	-- Per-building characteristics, rolled once.
 	local widthSlots = rng:NextInteger(3, 6)
 	local depthSlots = rng:NextInteger(3, 6)
-	local storeys = rng:NextInteger(1, 3)
+	local storeys = rng:NextInteger(1, 5)
 	local windowChance = rng:NextNumber(0.2, 0.55)
 	local doorCount = rng:NextInteger(1, 2)
 
