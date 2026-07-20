@@ -19,8 +19,9 @@
 -- Interactions (Minecraft-flavored, PC + mobile):
 --   * Drag an item (mouse or touch) onto another slot — move the whole stack;
 --     onto the same item it merges, onto a different item it swaps.
---   * Right-click (PC) or long-press (touch) a stack — split half of it into
---     the first empty slot.
+--   * Hold right-click (PC) or long-press (touch) a stack — half of it comes
+--     "in hand" and follows the pointer; release over a slot to place it,
+--     anywhere else to put it back. Same gesture shape as a normal drag.
 --   * Click/tap a hotbar item, or press its number key — equip its tool
 --     (again to unequip; the server materializes and validates everything).
 --   * Hover an item — RichText tooltip, auto-sized to its text.
@@ -30,7 +31,6 @@
 -- Item icons are live ViewportFrames showing the item's actual Tool model, so
 -- palette recoloring carries into the UI for free.
 
-local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
@@ -49,13 +49,11 @@ local TOOLTIP_GAP = 6 -- px between the item and the tooltip
 local TOOLTIP_MAX_WIDTH_FRACTION = 0.25 -- of screen width, floored at 160px
 local TOOLTIP_PADDING = 8 -- px, added only if the template has no UIPadding
 local DRAG_START_DISTANCE = 8 -- px of pointer travel before a press becomes a drag
-local EQUIP_BORDER_COLOR = Color3.new(0, 0, 0)
-local EQUIP_BORDER_THICKNESS = 3 -- px around the equipped hotbar slot
+local EQUIP_BORDER_COLOR = Color3.new(0.94902, 1, 0.003922)
+local EQUIP_BORDER_THICKNESS = 5 -- px around the equipped hotbar slot
 local LONG_PRESS_TIME = 0.45 -- seconds a touch must hold still to split
 local GHOST_TRANSPARENCY = 0.35 -- the dragged copy is see-through
 local SOURCE_DIM_TRANSPARENCY = 0.6 -- the original icon while its ghost is dragged
-
-local TOTAL_SLOTS = InventoryConfig.HotbarSlots + InventoryConfig.InventorySlots
 
 local localPlayer = Players.LocalPlayer
 
@@ -86,11 +84,15 @@ local renderInventory: (() -> ())? = nil
 
 type Drag = {
 	fromIndex: number,
-	count: number,
+	count: number, -- whole stack normally; half of it for a split drag
 	sourceIcon: ViewportFrame,
+	slot: Frame,
 	slotSize: Vector2,
-	startPosition: Vector2,
+	startPosition: Vector2, -- pointer position at press (input space)
+	baseAbsolute: Vector2, -- source slot center at press (AbsolutePosition space)
 	inputType: Enum.UserInputType,
+	touchInput: InputObject?, -- the specific finger driving a touch drag
+	isSplit: boolean, -- half-stack drag: ghost shows the half, slot the remainder
 	ghost: ViewportFrame?,
 	longPress: thread?,
 }
@@ -142,6 +144,9 @@ local function makeIcon(template: ViewportFrame, id: string): ViewportFrame?
 	icon.Name = "Item"
 	icon.Size = UDim2.fromScale(1, 1)
 	icon.Position = UDim2.fromScale(0, 0)
+	-- Sink touches so dragging an item doesn't also pan the camera or spawn
+	-- the dynamic thumbstick.
+	icon.Active = true
 	icon.Visible = true
 
 	local camera = Instance.new("Camera")
@@ -168,6 +173,7 @@ local function cloneSlots(container: Instance?, count: number, slots: { Frame },
 		local slot = template:Clone()
 		slot.Name = tostring(index)
 		slot.LayoutOrder = index
+		slot.Active = true -- taps on slots shouldn't pan the camera either
 		slot.Visible = true
 		slot.Parent = template.Parent
 		table.insert(slots, slot)
@@ -247,25 +253,70 @@ local function toggleInventory()
 	end
 end
 
--- Split: half the stack into the first empty slot (server validates too).
-local function requestSplit(fromIndex: number)
-	local stack = inventoryState[fromIndex]
-	if not stack or stack.Count < 2 then
-		return
-	end
-	for index = 1, TOTAL_SLOTS do
-		if not inventoryState[index] then
-			Packets.InventoryMove:Fire(fromIndex, index, math.floor(stack.Count / 2))
-			return
-		end
-	end
+-- Pointer positions are only ever used as DELTAS from where a gesture began:
+-- input coordinates and gui AbsolutePosition disagree by the topbar inset
+-- depending on device and the gui's IgnoreGuiInset, but differences between
+-- two pointer positions are correct in any space. All absolute anchoring
+-- comes from slot geometry instead.
+local function screenPosition(input: InputObject): Vector2
+	return Vector2.new(input.Position.X, input.Position.Y)
 end
 
--- UserInputService positions include the top gui inset; AbsolutePosition of
--- gui objects does not. Convert to the guis' space once, here.
-local function screenPosition(input: InputObject): Vector2
-	local inset = GuiService:GetGuiInset()
-	return Vector2.new(input.Position.X, input.Position.Y) - inset
+-- Converts a point in AbsolutePosition space into a Position offset local to
+-- the hud (its origin shifts when IgnoreGuiInset is enabled).
+local function toHudOffset(hud: ScreenGui, absolute: Vector2): UDim2
+	local origin = hud.AbsolutePosition
+	return UDim2.fromOffset(absolute.X - origin.X, absolute.Y - origin.Y)
+end
+
+-- Creates the floating ghost for a drag. Normal drags call this once the
+-- pointer travels far enough; split drags call it immediately at press. For
+-- splits the ghost carries the half being moved (with its own count label)
+-- while the source slot shows the remainder — visually only, the inventory
+-- doesn't change until the drop.
+local function beginDragVisuals(drag: Drag)
+	local hud = currentHud
+	if drag.ghost or not hud then
+		return
+	end
+	if drag.longPress then
+		task.cancel(drag.longPress)
+		drag.longPress = nil
+	end
+	if closeTooltip then
+		closeTooltip()
+	end
+
+	local ghost = drag.sourceIcon:Clone()
+	ghost.Name = "DragGhost"
+	ghost.Active = false
+	ghost.AnchorPoint = Vector2.new(0.5, 0.5)
+	ghost.Size = UDim2.fromOffset(drag.slotSize.X, drag.slotSize.Y)
+	ghost.ZIndex = 90
+	ghost.ImageTransparency = GHOST_TRANSPARENCY
+	local ghostCamera = ghost:FindFirstChildOfClass("Camera")
+	if ghostCamera then
+		ghost.CurrentCamera = ghostCamera
+	end
+
+	if drag.isSplit then
+		local countLabel = drag.slot:FindFirstChild("Count")
+		if countLabel and countLabel:IsA("TextLabel") then
+			local ghostCount = countLabel:Clone()
+			ghostCount.Text = tostring(drag.count)
+			ghostCount.ZIndex = 91
+			ghostCount.Parent = ghost
+			local stack = inventoryState[drag.fromIndex]
+			local remainder = if stack then stack.Count - drag.count else 0
+			countLabel.Text = if remainder > 1 then tostring(remainder) else ""
+		end
+	else
+		drag.sourceIcon.ImageTransparency = SOURCE_DIM_TRANSPARENCY
+	end
+
+	ghost.Position = toHudOffset(hud, drag.baseAbsolute)
+	ghost.Parent = hud
+	drag.ghost = ghost
 end
 
 -- A slot whose ancestor (e.g. the closed Inventory frame) is hidden still has
@@ -317,6 +368,22 @@ local function cancelDrag()
 	if drag.sourceIcon.Parent then
 		drag.sourceIcon.ImageTransparency = 0
 	end
+	if drag.isSplit and drag.ghost then
+		-- The source slot label showed the remainder; redraw from state (a
+		-- server snapshot after a successful drop redraws again — harmless).
+		local render = renderInventory
+		if render then
+			render()
+		end
+	end
+end
+
+-- Where the drag visually is, in AbsolutePosition space: the source slot's
+-- center moved by how far the pointer traveled. Deliberately NOT lifted above
+-- a finger — drops land here, and a lifted ghost could never reach the
+-- bottom-of-screen hotbar.
+local function dragAbsolutePosition(drag: Drag, position: Vector2): Vector2
+	return drag.baseAbsolute + (position - drag.startPosition)
 end
 
 local function updateDrag(position: Vector2)
@@ -330,30 +397,11 @@ local function updateDrag(position: Vector2)
 			return
 		end
 		-- Enough travel: the press is a drag, not a (long-)press.
-		if drag.longPress then
-			task.cancel(drag.longPress)
-			drag.longPress = nil
-		end
-		if closeTooltip then
-			closeTooltip()
-		end
-		local newGhost = drag.sourceIcon:Clone()
-		newGhost.Name = "DragGhost"
-		newGhost.AnchorPoint = Vector2.new(0.5, 0.5)
-		newGhost.Size = UDim2.fromOffset(drag.slotSize.X, drag.slotSize.Y)
-		newGhost.ZIndex = 90
-		newGhost.ImageTransparency = GHOST_TRANSPARENCY
-		local ghostCamera = newGhost:FindFirstChildOfClass("Camera")
-		if ghostCamera then
-			newGhost.CurrentCamera = ghostCamera
-		end
-		newGhost.Parent = hud
-		drag.ghost = newGhost
-		drag.sourceIcon.ImageTransparency = SOURCE_DIM_TRANSPARENCY
+		beginDragVisuals(drag)
 	end
 	local ghost = drag.ghost
 	if ghost then
-		ghost.Position = UDim2.fromOffset(position.X, position.Y)
+		ghost.Position = toHudOffset(hud, dragAbsolutePosition(drag, position))
 	end
 end
 
@@ -363,6 +411,7 @@ local function finishDrag(position: Vector2)
 		return
 	end
 	local wasDragging = drag.ghost ~= nil
+	local dropAbsolute = dragAbsolutePosition(drag, position)
 	cancelDrag()
 	if not wasDragging then
 		-- A press that never traveled is a click/tap: on a hotbar item that
@@ -372,45 +421,55 @@ local function finishDrag(position: Vector2)
 		end
 		return
 	end
-	local target = slotIndexAt(position)
+	local target = slotIndexAt(dropAbsolute)
 	if target and target ~= drag.fromIndex then
 		Packets.InventoryMove:Fire(drag.fromIndex, target, drag.count)
 	end
 end
 
 local function onIconPressed(index: number, stack: Stack, icon: ViewportFrame, slot: Frame, input: InputObject)
-	local inputType = input.UserInputType
-	if inputType == Enum.UserInputType.MouseButton2 then
-		requestSplit(index)
-		return
-	end
-	if inputType ~= Enum.UserInputType.MouseButton1 and inputType ~= Enum.UserInputType.Touch then
-		return
-	end
 	if activeDrag then
+		return
+	end
+	local inputType = input.UserInputType
+	local isSplit = inputType == Enum.UserInputType.MouseButton2
+	if isSplit and stack.Count < 2 then
+		return
+	end
+	if not isSplit and inputType ~= Enum.UserInputType.MouseButton1 and inputType ~= Enum.UserInputType.Touch then
 		return
 	end
 	local drag: Drag = {
 		fromIndex = index,
-		count = stack.Count,
+		count = if isSplit then math.floor(stack.Count / 2) else stack.Count,
 		sourceIcon = icon,
+		slot = slot,
 		slotSize = slot.AbsoluteSize,
 		startPosition = screenPosition(input),
+		baseAbsolute = slot.AbsolutePosition + slot.AbsoluteSize / 2,
 		inputType = inputType,
+		touchInput = if inputType == Enum.UserInputType.Touch then input else nil,
+		isSplit = isSplit,
 		ghost = nil,
 		longPress = nil,
 	}
-	if inputType == Enum.UserInputType.Touch then
-		-- A touch that holds still long enough becomes a split instead.
+	activeDrag = drag
+	if isSplit then
+		-- Right-button drag: the half is in hand immediately; releasing the
+		-- button drops it wherever the ghost is.
+		beginDragVisuals(drag)
+	elseif inputType == Enum.UserInputType.Touch then
+		-- A touch that holds still long enough turns into a split drag: the
+		-- half follows the finger and lands where it's released.
 		drag.longPress = task.delay(LONG_PRESS_TIME, function()
 			drag.longPress = nil
-			if activeDrag == drag and not drag.ghost then
-				activeDrag = nil
-				requestSplit(index)
+			if activeDrag == drag and not drag.ghost and stack.Count >= 2 then
+				drag.count = math.floor(stack.Count / 2)
+				drag.isSplit = true
+				beginDragVisuals(drag)
 			end
 		end)
 	end
-	activeDrag = drag
 end
 
 local function bindHud(hud: ScreenGui)
@@ -443,6 +502,7 @@ local function bindHud(hud: ScreenGui)
 	local inventory = hud:FindFirstChild("Inventory")
 	if inventory and inventory:IsA("Frame") then
 		inventory.Visible = false
+		inventory.Active = true -- touches on the panel shouldn't pan the camera
 		currentInventory = inventory
 	end
 
@@ -459,13 +519,17 @@ local function bindHud(hud: ScreenGui)
 			if hoveredItem ~= item or not tooltip.Visible then
 				return
 			end
+			-- Work in AbsolutePosition space, converting only at the end, so
+			-- the hud's IgnoreGuiInset setting can't shift the tooltip.
+			local origin = hud.AbsolutePosition
 			local size = tooltip.AbsoluteSize
-			local x = math.clamp(item.AbsolutePosition.X, 0, math.max(screen.X - size.X, 0))
+			local x = math.clamp(item.AbsolutePosition.X, origin.X, math.max(origin.X + screen.X - size.X, origin.X))
 			local y = item.AbsolutePosition.Y + item.AbsoluteSize.Y + TOOLTIP_GAP
-			if y + size.Y > screen.Y then
+			if y + size.Y > origin.Y + screen.Y then
 				y = item.AbsolutePosition.Y - size.Y - TOOLTIP_GAP -- flip above the item
 			end
-			tooltip.Position = UDim2.fromOffset(x, math.max(y, 0))
+			y = math.max(y, origin.Y)
+			tooltip.Position = UDim2.fromOffset(x - origin.X, y - origin.Y)
 		end)
 	end
 
@@ -553,17 +617,36 @@ function InventoryController:Start()
 
 	-- Bound once; drags reference whatever HUD/slots are current.
 	UserInputService.InputChanged:Connect(function(input)
-		if not activeDrag then
+		local inputType = input.UserInputType
+		if inputType ~= Enum.UserInputType.MouseMovement and inputType ~= Enum.UserInputType.Touch then
 			return
 		end
-		local inputType = input.UserInputType
-		if inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch then
-			updateDrag(screenPosition(input))
+		local position = screenPosition(input)
+		local drag = activeDrag
+		if drag then
+			-- Only the pointer that started the drag may steer it: on touch
+			-- that's one specific finger (joystick/camera fingers also fire
+			-- InputChanged), on mouse it's MouseMovement.
+			local steers = if drag.inputType == Enum.UserInputType.Touch
+				then input == drag.touchInput
+				else inputType == Enum.UserInputType.MouseMovement
+			if steers then
+				updateDrag(position)
+			end
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
 		local drag = activeDrag
-		if drag and input.UserInputType == drag.inputType then
+		if not drag then
+			return
+		end
+		-- Same identity rule as InputChanged: a second finger lifting must
+		-- not drop the drag somewhere else.
+		if drag.inputType == Enum.UserInputType.Touch then
+			if input == drag.touchInput then
+				finishDrag(screenPosition(input))
+			end
+		elseif input.UserInputType == drag.inputType then
 			finishDrag(screenPosition(input))
 		end
 	end)
