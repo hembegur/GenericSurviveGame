@@ -7,6 +7,14 @@ local InventoryConfig = {
 	Keybinds = {
 		ToggleInventory = Enum.KeyCode.E, -- Minecraft-style
 		ToggleInventoryGamepad = Enum.KeyCode.ButtonY,
+		-- One key per hotbar slot, in slot order.
+		HotbarKeys = {
+			Enum.KeyCode.One,
+			Enum.KeyCode.Two,
+			Enum.KeyCode.Three,
+			Enum.KeyCode.Four,
+			Enum.KeyCode.Five,
+		},
 	},
 
 	HotbarSlots = 5,

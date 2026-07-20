@@ -55,6 +55,10 @@ export type Config = {
 	Effects: Effects?,
 	UseDuration: number?,
 	Uses: number?,
+	-- Called after each successful use. When an external system owns the
+	-- item's lifetime (e.g. the inventory decrementing a stack), pass this
+	-- along with Uses = math.huge and destroy the consumable yourself.
+	OnConsumed: (() -> ())?,
 }
 
 -- Baseline stats for the placeholder items; .new falls back to these when the
@@ -71,6 +75,7 @@ export type Consumable = typeof(setmetatable(
 		Effects: Effects,
 		UseDuration: number,
 		UsesLeft: number,
+		_onConsumed: (() -> ())?,
 		_using: boolean,
 		_connections: { RBXScriptConnection },
 		_destroyed: boolean,
@@ -93,6 +98,7 @@ function Consumable.new(name: string, config: Config?): Consumable
 		Effects = effects :: Effects,
 		UseDuration = resolved.UseDuration or (preset and preset.UseDuration) or DEFAULT_USE_DURATION,
 		UsesLeft = resolved.Uses or (preset and preset.Uses) or DEFAULT_USES,
+		_onConsumed = resolved.OnConsumed,
 		_using = false,
 		_connections = {} :: { RBXScriptConnection },
 		_destroyed = false,
@@ -149,6 +155,12 @@ function Consumable._onActivated(self: Consumable)
 			return
 		end
 		self:_applyEffects(player, humanoid)
+		if self._onConsumed then
+			self._onConsumed()
+		end
+		if self._destroyed then
+			return -- the OnConsumed owner may have destroyed us already
+		end
 		self.UsesLeft -= 1
 		if self.UsesLeft <= 0 then
 			self:Destroy()

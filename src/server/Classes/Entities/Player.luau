@@ -183,6 +183,7 @@ end
 
 function PlayerClass.Destroy(self: PlayerClass)
 	self._destroyed = true
+	self.Inventory:Destroy()
 	if self.Character then
 		local character = self.Character
 		self.Character = nil

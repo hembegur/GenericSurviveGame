@@ -21,6 +21,10 @@ local Packets = {
 	-- Client → server: ask for a fresh InventoryState. Sent once when the UI
 	-- boots, since snapshots fired before the client listener existed are lost.
 	InventoryRequest = Packet("InventoryRequest"),
+
+	-- Client → server: select hotbar slot `index` — equip the tool for the
+	-- item there (empty slot or re-selecting the equipped slot = unequip).
+	InventoryEquip = Packet("InventoryEquip", Packet.NumberU8),
 }
 
 return Packets

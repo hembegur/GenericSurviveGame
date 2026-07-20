@@ -14,6 +14,8 @@ local InventoryConfig = require(GameModules:WaitForChild("InventoryConfig"))
 local ItemConfig = require(GameModules:WaitForChild("ItemConfig"))
 local Packets = require(GameModules:WaitForChild("Packets"))
 
+local Signal = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Signal"))
+
 export type Stack = Packets.Stack
 
 local EMPTY: Stack = { Id = "", Count = 0 } -- wire format for an empty slot
@@ -25,6 +27,9 @@ export type Inventory = typeof(setmetatable(
 	{} :: {
 		Player: Player,
 		TotalSlots: number,
+		-- Fired after any mutation (not after a plain Replicate); systems that
+		-- mirror inventory state (e.g. the equipped tool) revalidate on it.
+		Changed: Signal.Signal<()>,
 		_slots: { [number]: Stack },
 	},
 	Inventory
@@ -34,8 +39,14 @@ function Inventory.new(player: Player): Inventory
 	return setmetatable({
 		Player = player,
 		TotalSlots = InventoryConfig.HotbarSlots + InventoryConfig.InventorySlots,
+		Changed = Signal.new() :: Signal.Signal<()>,
 		_slots = {} :: { [number]: Stack },
 	}, Inventory)
+end
+
+function Inventory._changed(self: Inventory)
+	self:Replicate()
+	self.Changed:Fire()
 end
 
 function Inventory.Get(self: Inventory, index: number): Stack?
@@ -86,9 +97,29 @@ function Inventory.AddItem(self: Inventory, id: string, count: number): number
 		end
 	end
 	if changed then
-		self:Replicate()
+		self:_changed()
 	end
 	return remaining
+end
+
+-- Removes up to `count` items from a slot (e.g. one bite of a consumable).
+-- Returns how many were actually removed.
+function Inventory.RemoveFromSlot(self: Inventory, index: number, count: number): number
+	local stack = self._slots[index]
+	if not stack or count < 1 then
+		return 0
+	end
+	local removed = math.min(math.floor(count), stack.Count)
+	stack.Count -= removed
+	if stack.Count < 1 then
+		self._slots[index] = nil
+	end
+	self:_changed()
+	return removed
+end
+
+function Inventory.Destroy(self: Inventory)
+	self.Changed:Destroy()
 end
 
 local function isValidSlot(self: Inventory, index: number): boolean
@@ -132,7 +163,7 @@ function Inventory.Move(self: Inventory, from: number, to: number, count: number
 		end
 		self._slots[from], self._slots[to] = target, source
 	end
-	self:Replicate()
+	self:_changed()
 end
 
 return Inventory

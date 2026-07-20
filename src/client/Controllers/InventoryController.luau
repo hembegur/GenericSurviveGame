@@ -21,6 +21,8 @@
 --     onto the same item it merges, onto a different item it swaps.
 --   * Right-click (PC) or long-press (touch) a stack — split half of it into
 --     the first empty slot.
+--   * Click/tap a hotbar item, or press its number key — equip its tool
+--     (again to unequip; the server materializes and validates everything).
 --   * Hover an item — RichText tooltip, auto-sized to its text.
 --   * E / gamepad Y / the hotbar's InventorySlot button — toggle the
 --     inventory panel (starts closed; the hotbar is always visible).
@@ -31,6 +33,7 @@
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 
 local GameModules = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Modules"):WaitForChild("Game")
@@ -55,6 +58,13 @@ local TOTAL_SLOTS = InventoryConfig.HotbarSlots + InventoryConfig.InventorySlots
 local localPlayer = Players.LocalPlayer
 
 local InventoryController = {}
+
+function InventoryController:Init()
+	-- Our HUD replaces the whole default backpack UI (hotbar + inventory);
+	-- Tools keep working without it. This also frees the 1-9 number keys
+	-- from the core hotbar so our Keybind actions own them.
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+end
 
 type Stack = Packets.Stack
 
@@ -302,18 +312,24 @@ local function updateDrag(position: Vector2)
 		if closeTooltip then
 			closeTooltip()
 		end
-		local ghost = drag.sourceIcon:Clone()
-		ghost.Name = "DragGhost"
-		ghost.AnchorPoint = Vector2.new(0.5, 0.5)
-		ghost.Size = UDim2.fromOffset(drag.slotSize.X, drag.slotSize.Y)
-		ghost.ZIndex = 90
-		ghost.ImageTransparency = GHOST_TRANSPARENCY
-		ghost.CurrentCamera = ghost:FindFirstChildOfClass("Camera")
-		ghost.Parent = hud
-		drag.ghost = ghost
+		local newGhost = drag.sourceIcon:Clone()
+		newGhost.Name = "DragGhost"
+		newGhost.AnchorPoint = Vector2.new(0.5, 0.5)
+		newGhost.Size = UDim2.fromOffset(drag.slotSize.X, drag.slotSize.Y)
+		newGhost.ZIndex = 90
+		newGhost.ImageTransparency = GHOST_TRANSPARENCY
+		local ghostCamera = newGhost:FindFirstChildOfClass("Camera")
+		if ghostCamera then
+			newGhost.CurrentCamera = ghostCamera
+		end
+		newGhost.Parent = hud
+		drag.ghost = newGhost
 		drag.sourceIcon.ImageTransparency = SOURCE_DIM_TRANSPARENCY
 	end
-	drag.ghost.Position = UDim2.fromOffset(position.X, position.Y)
+	local ghost = drag.ghost
+	if ghost then
+		ghost.Position = UDim2.fromOffset(position.X, position.Y)
+	end
 end
 
 local function finishDrag(position: Vector2)
@@ -324,6 +340,11 @@ local function finishDrag(position: Vector2)
 	local wasDragging = drag.ghost ~= nil
 	cancelDrag()
 	if not wasDragging then
+		-- A press that never traveled is a click/tap: on a hotbar item that
+		-- means equip (toggle), matching the number keys.
+		if drag.fromIndex <= InventoryConfig.HotbarSlots then
+			Packets.InventoryEquip:Fire(drag.fromIndex)
+		end
 		return
 	end
 	local target = slotIndexAt(position)
@@ -441,7 +462,7 @@ local function bindHud(hud: ScreenGui)
 		end
 	end
 
-	renderInventory = function()
+	local render = function()
 		local close = closeTooltip
 		if close then
 			close() -- the hovered icon may be about to be destroyed
@@ -482,7 +503,8 @@ local function bindHud(hud: ScreenGui)
 			icon.Parent = slot
 		end
 	end
-	renderInventory()
+	renderInventory = render
+	render()
 end
 
 function InventoryController:Start()
@@ -493,6 +515,15 @@ function InventoryController:Start()
 		InventoryConfig.Keybinds.ToggleInventoryGamepad
 	)
 	toggleAction.Pressed:Connect(toggleInventory)
+
+	-- Number keys select hotbar slots (equip/unequip; empty slot = unequip).
+	local hotbarKeys = InventoryConfig.Keybinds.HotbarKeys
+	for index = 1, math.min(#hotbarKeys, InventoryConfig.HotbarSlots) do
+		local action = Keybind.GetAction(KEYBIND_CONTEXT, `HotbarSlot{index}`, hotbarKeys[index])
+		action.Pressed:Connect(function()
+			Packets.InventoryEquip:Fire(index)
+		end)
+	end
 
 	-- Bound once; drags reference whatever HUD/slots are current.
 	UserInputService.InputChanged:Connect(function(input)
@@ -530,8 +561,8 @@ function InventoryController:Start()
 	-- the HUD into PlayerGui on respawn, so bind whichever HUD is current.
 	task.spawn(function()
 		local playerGui = localPlayer:WaitForChild("PlayerGui")
-		playerGui.ChildAdded:Connect(function(child)
-			if child.Name == "HUD" and child:IsA("ScreenGui") then
+		playerGui.ChildAdded:Connect(function(child: Instance)
+			if child:IsA("ScreenGui") and child.Name == "HUD" then
 				task.defer(bindHud, child)
 			end
 		end)
