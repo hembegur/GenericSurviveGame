@@ -6,11 +6,15 @@
 -- the generated ground via TerrainService:GetHeightAt.
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Classes = script.Parent.Parent:WaitForChild("Classes")
 local PlayerClass = require(Classes:WaitForChild("Entities"):WaitForChild("Player"))
 
 local TerrainService = require(script.Parent:WaitForChild("TerrainService"))
+
+local GameModules = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Modules"):WaitForChild("Game")
+local StatsConfig = require(GameModules:WaitForChild("StatsConfig"))
 
 local SPAWN_RADIUS = 32 -- players spawn within this many studs of the map center
 local FALLBACK_SPAWN_HEIGHT = 60 -- used if terrain has no height there (shouldn't happen near center)
@@ -68,9 +72,22 @@ local function onPlayerAdded(player: Player)
 	if objects[player] == object then -- player may have left during the wait
 		object:SpawnCharacter()
 
-		--sword test
-		local CloseRangeWeapon = require(Classes:WaitForChild("Weapons"):WaitForChild("CloseRangeWeapon"))
-		CloseRangeWeapon.new():GiveTo(player)
+		-- Starter loadout, straight into the replicated inventory; the HUD
+		-- renders it and equipping will materialize the tools later.
+		object.Inventory:AddItem("Sword", 1)
+		object.Inventory:AddItem("Apple", 3)
+		object.Inventory:AddItem("Grapes", 5)
+		object.Inventory:AddItem("Cake", 1)
+
+		-- --sword test
+		-- local CloseRangeWeapon = require(Classes:WaitForChild("Weapons"):WaitForChild("CloseRangeWeapon"))
+		-- CloseRangeWeapon.new():GiveTo(player)
+
+		-- --consumables test
+		-- local Consumable = require(Classes:WaitForChild("Consumables"):WaitForChild("Consumable"))
+		-- for _, name in { "Apple", "Grapes", "Cake" } do
+		-- 	Consumable.new(name):GiveTo(player)
+		-- end
 	end
 end
 
@@ -90,6 +107,17 @@ function PlayerService:Start()
 	for _, player in Players:GetPlayers() do
 		task.spawn(onPlayerAdded, player)
 	end
+
+	-- One loop drives survival stat decay for everyone; per-player behavior
+	-- (pausing while dead, damage when empty) lives in PlayerClass:TickStats.
+	task.spawn(function()
+		while true do
+			local dt = task.wait(StatsConfig.TickInterval)
+			for _, object in objects do
+				object:TickStats(dt)
+			end
+		end
+	end)
 end
 
 -- Returns the Player class object backing a Roblox player, or nil if they

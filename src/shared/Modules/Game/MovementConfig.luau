@@ -21,7 +21,7 @@ local MovementConfig = {
 		-- Cap on how hard the constraint may push toward the dash velocity.
 		-- Finite so collisions absorb the dash instead of flinging the
 		-- character; raise it if the dash feels sluggish to start.
-		MaxForce = 15000,
+		MaxForce = 50000,
 	},
 }
 

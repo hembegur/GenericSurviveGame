@@ -6,8 +6,8 @@
 -- current position, and displays each scan in-game.
 --
 -- Placeholder assets for now — the Tool template defaults to
--- ReplicatedStorage.Assets.Models.Sword and swings come from
--- ReplicatedStorage.Assets.Animation.Weapon.CloseRange. Procedurally
+-- ReplicatedStorage.Assets.Tools.Weapons.Sword and swings come from the
+-- CloseRange folder under ReplicatedStorage.Assets.Animations. Procedurally
 -- generated weapons later just mean passing a different Config (template,
 -- damage, hitbox size, cooldown) into .new.
 --
@@ -22,7 +22,7 @@ local Hitbox = require(script.Parent.Parent:WaitForChild("Combat"):WaitForChild(
 local DEFAULT_DAMAGE = 15
 local DEFAULT_HITBOX_SIZE = Vector3.new(4, 5, 5)
 local DEFAULT_COOLDOWN = 0.5 -- seconds between swings
-local DEFAULT_SWING_DURATION = 0.4 -- hitbox-active window if a track has no length yet
+local DEFAULT_SWING_DURATION = 0.2 -- hitbox-active window if a track has no length yet
 
 local cachedTemplate: Tool? = nil
 local cachedAnimations: { Animation }? = nil
@@ -35,9 +35,9 @@ local function getDefaultTemplate(): Tool
 	if cachedTemplate then
 		return cachedTemplate
 	end
-	local tool = getAssets():WaitForChild("Models"):WaitForChild("Sword")
+	local tool = getAssets():WaitForChild("Tools"):WaitForChild("Weapons"):WaitForChild("Sword")
 	if not tool:IsA("Tool") then
-		error("CloseRangeWeapon: ReplicatedStorage.Assets.Models.Sword must be a Tool")
+		error("CloseRangeWeapon: ReplicatedStorage.Assets.Tools.Weapons.Sword must be a Tool")
 	end
 	tool.Archivable = true
 	cachedTemplate = tool
@@ -48,7 +48,13 @@ local function getSwingAnimations(): { Animation }
 	if cachedAnimations then
 		return cachedAnimations
 	end
-	local folder = getAssets():WaitForChild("Animation"):WaitForChild("Weapon"):WaitForChild("CloseRange")
+	-- Found by name anywhere under Assets.Animations so the folder can be
+	-- regrouped (Weapon/Weapons/...) without breaking this class.
+	local animationsRoot = getAssets():WaitForChild("Animations")
+	local folder = animationsRoot:FindFirstChild("CloseRange", true)
+	if not folder then
+		error("CloseRangeWeapon: no CloseRange folder found under Assets.Animations")
+	end
 	local animations: { Animation } = {}
 	for _, child in folder:GetChildren() do
 		if child:IsA("Animation") then
@@ -56,7 +62,7 @@ local function getSwingAnimations(): { Animation }
 		end
 	end
 	if #animations == 0 then
-		error("CloseRangeWeapon: no Animation instances in Assets.Animation.Weapon.CloseRange")
+		error(`CloseRangeWeapon: no Animation instances in {folder:GetFullName()}`)
 	end
 	cachedAnimations = animations
 	return animations
@@ -178,7 +184,7 @@ function CloseRangeWeapon._onEquipped(self: CloseRangeWeapon)
 		Size = self.HitboxSize,
 		Offset = self.HitboxOffset,
 		Filter = { character },
-		Visualize = true,
+		Visualize = false,
 	})
 	hitbox.OnHit:Connect(function(_model, hitHumanoid)
 		hitHumanoid:TakeDamage(self.Damage)

@@ -13,6 +13,11 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local GameModules = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Modules"):WaitForChild("Game")
+local StatsConfig = require(GameModules:WaitForChild("StatsConfig"))
+
+local InventoryClass = require(script.Parent:WaitForChild("Inventory"))
+
 local SPAWN_CLEARANCE = 2 -- extra studs above the ground so the rig never spawns intersecting it
 
 local cachedRig: Model? = nil
@@ -37,6 +42,8 @@ export type PlayerClass = typeof(setmetatable(
 	{} :: {
 		Player: Player,
 		Character: Model?,
+		Stats: { [string]: number },
+		Inventory: InventoryClass.Inventory,
 		_getSpawnCFrame: () -> CFrame,
 		_respawnScheduled: boolean,
 		_destroyed: boolean,
@@ -45,13 +52,59 @@ export type PlayerClass = typeof(setmetatable(
 ))
 
 function PlayerClass.new(player: Player, getSpawnCFrame: () -> CFrame): PlayerClass
-	return setmetatable({
+	local self = setmetatable({
 		Player = player,
 		Character = nil :: Model?,
+		Stats = {} :: { [string]: number },
+		Inventory = InventoryClass.new(player),
 		_getSpawnCFrame = getSpawnCFrame,
 		_respawnScheduled = false,
 		_destroyed = false,
 	}, PlayerClass)
+	self:ResetStats()
+	return self
+end
+
+-- Sets every survival stat back to its max (fresh spawn state).
+function PlayerClass.ResetStats(self: PlayerClass)
+	for name, stat in StatsConfig.Survival do
+		self.Stats[name] = stat.Max
+		self.Player:SetAttribute(name, stat.Max)
+	end
+end
+
+-- Adds (or subtracts, with a negative amount) to a survival stat, clamped to
+-- [0, Max]. This is the hook for food/drink items and modifiers.
+function PlayerClass.AdjustStat(self: PlayerClass, name: string, amount: number)
+	local stat = StatsConfig.Survival[name]
+	if not stat then
+		error(`Player: unknown survival stat "{name}"`)
+	end
+	local value = math.clamp(self.Stats[name] + amount, 0, stat.Max)
+	self.Stats[name] = value
+	self.Player:SetAttribute(name, value)
+end
+
+-- Advances survival stats by dt seconds: decay while alive, Humanoid damage
+-- once a stat is empty. Paused while the player has no living character, so
+-- nobody starves during respawn.
+function PlayerClass.TickStats(self: PlayerClass, dt: number)
+	if self._destroyed then
+		return
+	end
+	local character = self.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		return
+	end
+	for name, stat in StatsConfig.Survival do
+		local value = math.max(self.Stats[name] - stat.DecayPerSecond * dt, 0)
+		self.Stats[name] = value
+		self.Player:SetAttribute(name, value)
+		if value <= 0 then
+			humanoid:TakeDamage(stat.DamagePerSecondWhenEmpty * dt)
+		end
+	end
 end
 
 -- Replaces the player's character with a fresh clone of the rig, placed at
@@ -75,6 +128,7 @@ function PlayerClass.SpawnCharacter(self: PlayerClass)
 		error("Player: the Default rig has no Humanoid")
 	end
 	humanoid.Health = humanoid.MaxHealth
+	self:ResetStats()
 
 	local rootPart = rig:FindFirstChild("HumanoidRootPart")
 	if rootPart and rootPart:IsA("BasePart") then
