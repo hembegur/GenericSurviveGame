@@ -23,7 +23,7 @@ local ThemePalette = require(GameModules:WaitForChild("ThemePalette"))
 
 local FILL_TWEEN = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local LOW_RATIO = 0.25 -- at or below this fraction the fill shows the danger tint
-local DANGER_BLEND = 0.6 -- how far the fill lerps toward the Danger color when low
+local DANGER_BLEND = 0 -- how far the fill lerps toward the Danger color when low
 
 local localPlayer = Players.LocalPlayer
 

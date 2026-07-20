@@ -50,8 +50,8 @@ local TOOLTIP_MAX_WIDTH_FRACTION = 0.25 -- of screen width, floored at 160px
 local TOOLTIP_PADDING = 8 -- px, added only if the template has no UIPadding
 local DRAG_START_DISTANCE = 8 -- px of pointer travel before a press becomes a drag
 local EQUIP_BORDER_COLOR = Color3.new(0.94902, 1, 0.003922)
-local EQUIP_BORDER_THICKNESS = 5 -- px around the equipped hotbar slot
-local LONG_PRESS_TIME = 0.45 -- seconds a touch must hold still to split
+local EQUIP_BORDER_THICKNESS = 4 -- px around the equipped hotbar slot
+local LONG_PRESS_TIME = 0.6 -- seconds a touch must hold still to split
 local GHOST_TRANSPARENCY = 0.35 -- the dragged copy is see-through
 local SOURCE_DIM_TRANSPARENCY = 0.6 -- the original icon while its ghost is dragged
 
