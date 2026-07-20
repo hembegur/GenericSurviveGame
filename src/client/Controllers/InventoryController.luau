@@ -49,6 +49,8 @@ local TOOLTIP_GAP = 6 -- px between the item and the tooltip
 local TOOLTIP_MAX_WIDTH_FRACTION = 0.25 -- of screen width, floored at 160px
 local TOOLTIP_PADDING = 8 -- px, added only if the template has no UIPadding
 local DRAG_START_DISTANCE = 8 -- px of pointer travel before a press becomes a drag
+local EQUIP_BORDER_COLOR = Color3.new(0, 0, 0)
+local EQUIP_BORDER_THICKNESS = 3 -- px around the equipped hotbar slot
 local LONG_PRESS_TIME = 0.45 -- seconds a touch must hold still to split
 local GHOST_TRANSPARENCY = 0.35 -- the dragged copy is see-through
 local SOURCE_DIM_TRANSPARENCY = 0.6 -- the original icon while its ghost is dragged
@@ -70,6 +72,8 @@ type Stack = Packets.Stack
 
 -- Server-replicated inventory state (slot index → stack; nil = empty).
 local inventoryState: { [number]: Stack } = {}
+-- Server-replicated equipped hotbar slot (nil = holding nothing).
+local equippedSlot: number? = nil
 
 -- State of the currently bound HUD, refreshed by bindHud whenever StarterGui
 -- re-clones the gui. The keybind, packet, and drag handlers are bound once
@@ -209,6 +213,27 @@ local function buildTooltip(hud: ScreenGui, template: TextLabel): TextLabel
 	end
 	tooltip.Parent = hud
 	return tooltip
+end
+
+-- Black border on the hotbar slot whose tool is in hand, cleared everywhere
+-- else. Driven purely by the server's InventoryEquipped packets.
+local function updateEquipHighlight()
+	for index = 1, math.min(InventoryConfig.HotbarSlots, #currentSlots) do
+		local slot = currentSlots[index]
+		local stroke = slot:FindFirstChild("EquipStroke")
+		if index == equippedSlot then
+			if not stroke then
+				local newStroke = Instance.new("UIStroke")
+				newStroke.Name = "EquipStroke"
+				newStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+				newStroke.Color = EQUIP_BORDER_COLOR
+				newStroke.Thickness = EQUIP_BORDER_THICKNESS
+				newStroke.Parent = slot
+			end
+		elseif stroke then
+			stroke:Destroy()
+		end
+	end
 end
 
 local function toggleInventory()
@@ -505,6 +530,7 @@ local function bindHud(hud: ScreenGui)
 	end
 	renderInventory = render
 	render()
+	updateEquipHighlight() -- restore the border after a gui reset
 end
 
 function InventoryController:Start()
@@ -540,6 +566,11 @@ function InventoryController:Start()
 		if drag and input.UserInputType == drag.inputType then
 			finishDrag(screenPosition(input))
 		end
+	end)
+
+	Packets.InventoryEquipped.OnClientEvent:Connect(function(index: number)
+		equippedSlot = if index >= 1 then index else nil
+		updateEquipHighlight()
 	end)
 
 	Packets.InventoryState.OnClientEvent:Connect(function(snapshot: { Stack })

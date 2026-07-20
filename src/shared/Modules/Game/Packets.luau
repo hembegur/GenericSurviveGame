@@ -25,6 +25,11 @@ local Packets = {
 	-- Client → server: select hotbar slot `index` — equip the tool for the
 	-- item there (empty slot or re-selecting the equipped slot = unequip).
 	InventoryEquip = Packet("InventoryEquip", Packet.NumberU8),
+
+	-- Server → owning client: which hotbar slot is actually equipped now
+	-- (0 = none), so the UI can highlight it. Sent on every equip change,
+	-- including server-side ones (death, the equipped stack moving away).
+	InventoryEquipped = Packet("InventoryEquipped", Packet.NumberU8),
 }
 
 return Packets

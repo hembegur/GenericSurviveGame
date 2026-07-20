@@ -60,6 +60,7 @@ local function unequip(player: Player)
 		connection:Disconnect()
 	end
 	record.object:Destroy() -- destroys the tool too
+	Packets.InventoryEquipped:FireClient(player, 0)
 end
 
 -- Builds the item object for a stack. Consumables get an infinite-use tool
@@ -140,6 +141,7 @@ local function equipSlot(player: Player, index: number)
 				for _, connection in record.connections do
 					connection:Disconnect()
 				end
+				Packets.InventoryEquipped:FireClient(player, 0)
 			end
 		end)
 	)
@@ -163,6 +165,7 @@ local function equipSlot(player: Player, index: number)
 	tool.CanBeDropped = false
 	tool.Parent = player:FindFirstChildOfClass("Backpack") or character
 	humanoid:EquipTool(tool)
+	Packets.InventoryEquipped:FireClient(player, index)
 end
 
 function InventoryService:Start()
