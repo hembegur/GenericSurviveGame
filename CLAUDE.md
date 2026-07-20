@@ -62,6 +62,7 @@ Modules are plain tables returned from the ModuleScript; state is module-level l
 - `TerrainService` — builds the ground from `workspace:GetAttribute("WorldSeed")` (random if unset) as greedy-merged parts, time-budgeted per frame; `:GetHeightAt` is the query other systems use.
 - `SpawnService` — spawns/tracks world objects from a `Registry` table; a registered class needs `.new(seed?)`, `:Generate() -> Model`, and `:Destroy()`.
 - `InventoryService` — bridges inventory packets to the player's `Inventory` and owns "which hotbar slot is equipped", materializing the item's Tool via the item classes.
+- `DropService` — item stacks on the ground: anchored parts-models in `workspace.Drops` carrying `DropId`/`ItemId`/`Count` attributes (which replicate on their own — no drop-state packets), plus server-side pickup validation.
 
 `src/server/Classes/` — instantiable OOP classes, grouped by domain (`Entities/`, `Weapons/`, `Consumables/`, `Combat/`, `World/`):
 
@@ -73,7 +74,9 @@ Modules are plain tables returned from the ModuleScript; state is module-level l
 
 ### Client
 
-`src/client/Controllers/` — `HudController` (stat bars), `InventoryController` (hotbar + inventory grid, drag/split/equip), `MovementController` (dash). Controllers render server state and send intents; they never own gameplay truth.
+`src/client/Controllers/` — `HudController` (stat bars), `InventoryController` (hotbar + inventory grid, drag/split/equip), `DropController` (Backspace drop + nearby ground-item pickup list in `HUD.OnGround`), `MovementController` (dash). Controllers render server state and send intents; they never own gameplay truth.
+
+`src/client/Modules/` — plain helper modules shared between controllers (not auto-loaded): `ItemIcon` builds the live ViewportFrame item icons.
 
 ### Shared
 
@@ -106,6 +109,6 @@ Continuous per-player values (survival stats) replicate as **attributes on the `
 
 ## Current state
 
-Working: seeded terrain generation, custom rig spawning/respawning, survival stats with HUD bars, a full inventory + hotbar with drag/split/equip, melee weapons with pulsed hitboxes, consumables, dash movement, and seeded tree/building generation.
+Working: seeded terrain generation, custom rig spawning/respawning, survival stats with HUD bars, a full inventory + hotbar with drag/split/equip and Backspace drop/proximity pickup, melee weapons with pulsed hitboxes, consumables, dash movement, and seeded tree/building generation.
 
 Not built yet: the seed-driven palette generation and run-modifier layers described in the overview (`ThemePalette` currently only ships a `Default` grayscale palette), enemies, and data persistence.

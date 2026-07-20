@@ -28,8 +28,9 @@
 --   * E / gamepad Y / the hotbar's InventorySlot button — toggle the
 --     inventory panel (starts closed; the hotbar is always visible).
 --
--- Item icons are live ViewportFrames showing the item's actual Tool model, so
--- palette recoloring carries into the UI for free.
+-- Item icons are live ViewportFrames showing the item's actual Tool model
+-- (built by Client.Modules.ItemIcon), so palette recoloring carries into the
+-- UI for free.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -42,9 +43,9 @@ local InventoryConfig = require(GameModules:WaitForChild("InventoryConfig"))
 local Keybind = require(GameModules:WaitForChild("Keybind"))
 local Packets = require(GameModules:WaitForChild("Packets"))
 
+local ItemIcon = require(script.Parent.Parent:WaitForChild("Modules"):WaitForChild("ItemIcon"))
+
 local KEYBIND_CONTEXT = "idle" -- Keybind's always-on context
-local ICON_VIEW_DIRECTION = Vector3.new(1, 0.8, 1).Unit -- camera sits along this from the model
-local ICON_ZOOM = 1.15 -- >1 pulls the camera back a little beyond a tight fit
 local TOOLTIP_GAP = 6 -- px between the item and the tooltip
 local TOOLTIP_MAX_WIDTH_FRACTION = 0.25 -- of screen width, floored at 160px
 local TOOLTIP_PADDING = 8 -- px, added only if the template has no UIPadding
@@ -97,67 +98,6 @@ type Drag = {
 	longPress: thread?,
 }
 local activeDrag: Drag? = nil
-
--- One built Model per item id; icons get clones of it.
-local modelCache: { [string]: Model } = {}
-
-local function getItemModel(id: string): Model?
-	local cached = modelCache[id]
-	if cached then
-		return cached:Clone()
-	end
-	local def = ItemConfig.Items[id]
-	if not def then
-		warn(`InventoryController: no ItemConfig entry for "{id}"`)
-		return nil
-	end
-	local tools = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Tools")
-	local category = tools:FindFirstChild(def.Category)
-	local tool = category and category:FindFirstChild(id)
-	if not tool then
-		warn(`InventoryController: no asset at Assets.Tools.{def.Category}.{id}`)
-		return nil
-	end
-	-- Viewports render parts only; lift them out of the Tool (keeping their
-	-- authored CFrames) so no scripts or tool behavior come along.
-	local model = Instance.new("Model")
-	for _, descendant in tool:Clone():GetDescendants() do
-		if descendant:IsA("BasePart") then
-			descendant.Anchored = true
-			descendant.Parent = model
-		end
-	end
-	if not model:FindFirstChildWhichIsA("BasePart") then
-		warn(`InventoryController: {id} has no BaseParts to show in a viewport`)
-		return nil
-	end
-	modelCache[id] = model
-	return model:Clone()
-end
-
-local function makeIcon(template: ViewportFrame, id: string): ViewportFrame?
-	local model = getItemModel(id)
-	if not model then
-		return nil
-	end
-	local icon = template:Clone()
-	icon.Name = "Item"
-	icon.Size = UDim2.fromScale(1, 1)
-	icon.Position = UDim2.fromScale(0, 0)
-	-- Sink touches so dragging an item doesn't also pan the camera or spawn
-	-- the dynamic thumbstick.
-	icon.Active = true
-	icon.Visible = true
-
-	local camera = Instance.new("Camera")
-	local boundsCFrame, boundsSize = model:GetBoundingBox()
-	local distance = (boundsSize.Magnitude / 2) / math.tan(math.rad(camera.FieldOfView / 2)) * ICON_ZOOM
-	camera.CFrame = CFrame.lookAt(boundsCFrame.Position + ICON_VIEW_DIRECTION * distance, boundsCFrame.Position)
-	camera.Parent = icon
-	icon.CurrentCamera = camera
-	model.Parent = icon
-	return icon
-end
 
 -- Clones a container's template Frame count times (hiding the template) and
 -- appends the clones, named and LayoutOrder-ed by their overall slot index.
@@ -570,7 +510,7 @@ local function bindHud(hud: ScreenGui)
 			if not stack then
 				continue
 			end
-			local icon = makeIcon(iconTemplate, stack.Id)
+			local icon = ItemIcon.make(iconTemplate, stack.Id)
 			if not icon then
 				continue
 			end

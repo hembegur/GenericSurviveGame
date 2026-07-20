@@ -14,7 +14,9 @@
 --     (moves, splits onto it, ...) auto-unequips, so the tool in hand always
 --     mirrors the stack it came from,
 --   * death destroys the tool with the character; the record cleans itself up
---     via Tool.Destroying.
+--     via Tool.Destroying,
+--   * Packets.InventoryDrop (Backspace) empties the equipped slot onto the
+--     ground as a DropService drop — the emptying itself auto-unequips.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -28,6 +30,7 @@ local Classes = script.Parent.Parent:WaitForChild("Classes")
 local CloseRangeWeapon = require(Classes:WaitForChild("Weapons"):WaitForChild("CloseRangeWeapon"))
 local Consumable = require(Classes:WaitForChild("Consumables"):WaitForChild("Consumable"))
 
+local DropService = require(script.Parent:WaitForChild("DropService"))
 local PlayerService = require(script.Parent:WaitForChild("PlayerService"))
 
 type Equippable = { Tool: Tool, Destroy: (any) -> () } -- what we need of the item classes
@@ -177,6 +180,34 @@ function InventoryService:Start()
 	end)
 
 	Packets.InventoryEquip.OnServerEvent:Connect(equipSlot)
+
+	-- Drop the equipped stack at the feet. Emptying the slot fires
+	-- Inventory.Changed, whose handler above unequips and destroys the tool,
+	-- so the hand and the highlight clear themselves.
+	Packets.InventoryDrop.OnServerEvent:Connect(function(player)
+		local record = equipped[player]
+		if not record then
+			return
+		end
+		local object = PlayerService:GetObject(player)
+		if not object then
+			return
+		end
+		local stack = object.Inventory:Get(record.index)
+		if not stack or stack.Id ~= record.id then
+			return -- stale: the Changed handler is about to unequip anyway
+		end
+		local character = object.Character
+		local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+		if not (rootPart and rootPart:IsA("BasePart")) then
+			return
+		end
+		-- Spawn before removing: if the item has no usable asset the drop
+		-- fails and the stack must stay in the inventory, not vanish.
+		if DropService:Spawn(stack.Id, stack.Count, rootPart.Position, if character then { character :: Instance } else nil) then
+			object.Inventory:RemoveFromSlot(record.index, stack.Count)
+		end
+	end)
 
 	-- The client asks for a snapshot once its UI is ready; snapshots fired
 	-- before its listener existed (e.g. the starter loadout) are lost.

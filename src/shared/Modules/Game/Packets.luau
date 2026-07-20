@@ -30,6 +30,14 @@ local Packets = {
 	-- (0 = none), so the UI can highlight it. Sent on every equip change,
 	-- including server-side ones (death, the equipped stack moving away).
 	InventoryEquipped = Packet("InventoryEquipped", Packet.NumberU8),
+
+	-- Client → server: drop the equipped stack onto the ground at the feet
+	-- (Backspace). The server knows what's equipped, so no arguments.
+	InventoryDrop = Packet("InventoryDrop"),
+
+	-- Client → server: pick up the ground drop whose model carries this
+	-- DropId attribute. Validated server-side (existence, distance, space).
+	DropPickup = Packet("DropPickup", Packet.NumberU32),
 }
 
 return Packets
