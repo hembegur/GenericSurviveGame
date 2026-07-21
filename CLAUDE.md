@@ -43,7 +43,7 @@ Art and GUI assets live in the `.rbxlx` place file, not on disk, so they cannot 
 - `ReplicatedStorage.Assets.Player.Default` — the custom character rig cloned for every spawn
 - `ReplicatedStorage.Assets.Animations.CloseRange` — swing animations (found by name anywhere under `Animations`)
 - `ServerStorage.BuildingKits` — hand-built building modules (Wall, Window, Door, Corner, Floor, Roof, Foundation, Stair)
-- `StarterGui.HUD` — stat bars, hotbar, and inventory grid, driven by the client controllers
+- `StarterGui.HUD` — stat bars, hotbar, inventory grid, and the `StatusEffects` panel (a Frame with a UIGridLayout and a template `Frame` holding `Name`/`Time` labels), driven by the client controllers
 
 When a change needs a new asset, say so explicitly — the user has to author it in Studio.
 
@@ -77,7 +77,7 @@ Modules are plain tables returned from the ModuleScript; state is module-level l
 
 ### Client
 
-`src/client/Controllers/` — `HudController` (stat bars), `InventoryController` (hotbar + inventory grid, drag/split/equip), `DropController` (Backspace drop + nearby ground-item pickup list in `HUD.OnGround`), `MovementController` (dash). Controllers render server state and send intents; they never own gameplay truth.
+`src/client/Controllers/` — `HudController` (stat bars), `InventoryController` (hotbar + inventory grid, drag/split/equip), `DropController` (Backspace drop + nearby ground-item pickup list in `HUD.OnGround`), `StatusEffectController` (active-effect rows in `HUD.StatusEffects`, mirrored from the `Effect_*` Player attributes, tinted red/green/white by the config's `Harmful` flag), `MovementController` (dash). Controllers render server state and send intents; they never own gameplay truth.
 
 `src/client/Modules/` — plain helper modules shared between controllers (not auto-loaded): `ItemIcon` builds the live ViewportFrame item icons.
 
@@ -113,6 +113,6 @@ Continuous per-player values (survival stats) replicate as **attributes on the `
 
 ## Current state
 
-Working: seeded terrain generation, custom rig spawning/respawning, survival stats with HUD bars, server-side status effects (nothing applies them in normal play yet, and no HUD display), a full inventory + hotbar with drag/split/equip and Backspace drop/proximity pickup, melee weapons with pulsed hitboxes, consumables (hand-authored presets plus seed-generated food/drink/fruit items from mesh models), dash movement, and seeded tree/building generation.
+Working: seeded terrain generation, custom rig spawning/respawning, survival stats with HUD bars, server-side status effects with a HUD panel (nothing applies them in normal play yet; `PlayerService` currently applies a test batch on spawn), a full inventory + hotbar with drag/split/equip and Backspace drop/proximity pickup, melee weapons with pulsed hitboxes, consumables (hand-authored presets plus seed-generated food/drink/fruit items from mesh models), dash movement, and seeded tree/building generation.
 
 Not built yet: the seed-driven palette generation and run-modifier layers described in the overview (`ThemePalette` currently only ships a `Default` grayscale palette), enemies, and data persistence.

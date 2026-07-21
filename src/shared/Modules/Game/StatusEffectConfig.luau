@@ -26,7 +26,7 @@ export type EffectDef = {
 	DisplayName: string,
 	Duration: number, -- seconds one application lasts; reapplying refreshes
 	MaxStacks: number?, -- default 1
-	Harmful: boolean, -- for cleansing items / HUD tinting later
+	Harmful: boolean?, -- true = harmful (HUD tints red, cleansing targets it), false = beneficial (green); omit for neutral (white)
 	HealthPerSecond: number?, -- per stack; negative = damage
 	MinHealth: number?, -- this effect's damage never drags Health below this
 	StatDecayMultiplier: number?,

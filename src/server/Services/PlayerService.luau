@@ -98,10 +98,11 @@ local function onPlayerAdded(player: Player)
 		-- end
 
 		-- --status effects test
-		-- object.StatusEffects:Apply("Burning")
-		-- object.StatusEffects:Apply("Regeneration")
-		-- object.StatusEffects:Apply("Bleeding", { Stacks = 3 })
-		-- object.StatusEffects:Apply("Adrenaline")
+		object.StatusEffects:Apply("Burning")
+		object.StatusEffects:Apply("Regeneration")
+		object.StatusEffects:Apply("Bleeding", { Stacks = 3 })
+		object.StatusEffects:Apply("Adrenaline")
+		object.StatusEffects:Apply("FoodPoisoning")
 	end
 end
 
