@@ -8,6 +8,10 @@
 -- (CloseRangeWeapon defaults, Consumable.Presets); the numbers quoted in
 -- these descriptions are display copy and must be kept in sync by hand for
 -- now.
+--
+-- Items here are the hand-authored baseline: ConsumableGen registers this
+-- run's seeded consumables into Items at runtime (on both sides), and their
+-- descriptions are generated from the real numbers.
 
 local InventoryConfig = require(script.Parent:WaitForChild("InventoryConfig"))
 

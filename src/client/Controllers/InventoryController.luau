@@ -38,6 +38,7 @@ local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 
 local GameModules = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Modules"):WaitForChild("Game")
+local ConsumableGen = require(GameModules:WaitForChild("ConsumableGen"))
 local ItemConfig = require(GameModules:WaitForChild("ItemConfig"))
 local InventoryConfig = require(GameModules:WaitForChild("InventoryConfig"))
 local Keybind = require(GameModules:WaitForChild("Keybind"))
@@ -61,6 +62,11 @@ local localPlayer = Players.LocalPlayer
 local InventoryController = {}
 
 function InventoryController:Init()
+	-- Register this run's generated consumables into ItemConfig before any
+	-- server snapshot renders their icons or tooltips (module cache makes this
+	-- one call cover every controller).
+	ConsumableGen.load()
+
 	-- Our HUD replaces the whole default backpack UI (hotbar + inventory);
 	-- Tools keep working without it. This also frees the 1-9 number keys
 	-- from the core hotbar so our Keybind actions own them.

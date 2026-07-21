@@ -14,6 +14,7 @@ local PlayerClass = require(Classes:WaitForChild("Entities"):WaitForChild("Playe
 local TerrainService = require(script.Parent:WaitForChild("TerrainService"))
 
 local GameModules = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Modules"):WaitForChild("Game")
+local ConsumableGen = require(GameModules:WaitForChild("ConsumableGen"))
 local StatsConfig = require(GameModules:WaitForChild("StatsConfig"))
 
 local SPAWN_RADIUS = 32 -- players spawn within this many studs of the map center
@@ -75,9 +76,16 @@ local function onPlayerAdded(player: Player)
 		-- Starter loadout, straight into the replicated inventory; the HUD
 		-- renders it and equipping will materialize the tools later.
 		object.Inventory:AddItem("Sword", 1)
-		object.Inventory:AddItem("Apple", 3)
-		object.Inventory:AddItem("Grapes", 5)
-		object.Inventory:AddItem("Cake", 1)
+		-- Two of the first generated consumable of each kind, so this run's
+		-- seeded foods can be tried before a world spawner exists.
+		local defs, order = ConsumableGen.load()
+		local testCount = 1
+		for _, id in order do
+			if testCount < 10 then
+				testCount += 1
+				object.Inventory:AddItem(id, 2)
+			end
+		end
 
 		-- --sword test
 		-- local CloseRangeWeapon = require(Classes:WaitForChild("Weapons"):WaitForChild("CloseRangeWeapon"))

@@ -38,7 +38,8 @@ Key installed packages: Fusion 0.3 (UI), Promise, Signal, Janitor, Timer, TableU
 
 Art and GUI assets live in the `.rbxlx` place file, not on disk, so they cannot be read or edited from here. Code refers to them by path:
 
-- `ReplicatedStorage.Assets.Tools.<Category>.<ItemId>` — Tool templates (`Weapons/Sword`, `Consumables/Apple`, ...)
+- `ReplicatedStorage.Assets.Tools.<Category>.<ItemId>` — Tool templates (`Weapons/Sword`, `Consumables/Apple`, ...); `Consumables/ConsumableTemplate` (a Tool with `Handle` and `Model` parts) is the blank ConsumableService stamps generated food tools from
+- `ReplicatedStorage.Assets.Models.Consumables.<Kind>` — mesh parts for generated consumables, one folder per kind (`Food`, `Drink`, `Fruit`); the mesh name becomes the item id
 - `ReplicatedStorage.Assets.Player.Default` — the custom character rig cloned for every spawn
 - `ReplicatedStorage.Assets.Animations.CloseRange` — swing animations (found by name anywhere under `Animations`)
 - `ServerStorage.BuildingKits` — hand-built building modules (Wall, Window, Door, Corner, Floor, Roof, Foundation, Stair)
@@ -63,6 +64,7 @@ Modules are plain tables returned from the ModuleScript; state is module-level l
 - `SpawnService` — spawns/tracks world objects from a `Registry` table; a registered class needs `.new(seed?)`, `:Generate() -> Model`, and `:Destroy()`.
 - `InventoryService` — bridges inventory packets to the player's `Inventory` and owns "which hotbar slot is equipped", materializing the item's Tool via the item classes.
 - `DropService` — item stacks on the ground: anchored parts-models in `workspace.Drops` carrying `DropId`/`ItemId`/`Count` attributes (which replicate on their own — no drop-state packets), plus server-side pickup validation.
+- `ConsumableService` — at Init, registers `Consumable.Presets` for the `ConsumableGen` items and builds each one's Tool (ConsumableTemplate clone, mesh welded in place of the `Model` placeholder) into `Assets.Tools.Consumables`, so all by-name lookups work unchanged.
 
 `src/server/Classes/` — instantiable OOP classes, grouped by domain (`Entities/`, `Weapons/`, `Consumables/`, `Combat/`, `World/`):
 
@@ -82,7 +84,7 @@ Modules are plain tables returned from the ModuleScript; state is module-level l
 
 `src/shared/Modules/Game/` is config + pure logic, required by both sides:
 
-`InventoryConfig`, `ItemConfig`, `StatsConfig`, `MovementConfig`, `TerrainConfig` (tunables), `TerrainMap` (deterministic seed → height/biome math, no Instances), `ThemePalette` (color roles), `Packets` (all network schemas), `Keybind` (client-only Input Action System wrapper — it asserts `RunService:IsClient()`).
+`InventoryConfig`, `ItemConfig`, `StatsConfig`, `MovementConfig`, `TerrainConfig` (tunables), `TerrainMap` (deterministic seed → height/biome math, no Instances), `ThemePalette` (color roles), `Packets` (all network schemas), `Keybind` (client-only Input Action System wrapper — it asserts `RunService:IsClient()`), `ConsumableGen` (seeded consumable stats from the `Assets.Models.Consumables` mesh names — Food restores hunger, Drink thirst, Fruit both; `load()` runs on both sides and registers the items into `ItemConfig.Items`).
 
 `src/shared/Hello.luau` is a leftover template file.
 
@@ -99,6 +101,7 @@ These hold across the codebase; match them in new code.
 - **Tunables go in a shared config module, not inline** — the run-modifier system is meant to rewrite those tables at runtime to change game rules.
 - **Procedural models sort their parts into `ThemePalette` role folders** (`Primary`, `Secondary`, `Accent`, `Detail`, `Danger`) with a per-part `Shade` attribute, so `ThemePalette.apply` can retint anything.
 - Require cycles are broken with a **lazy require inside the function** (see `Consumable`'s `getPlayerService`).
+- **ScrollingFrame gotchas** (both hit in practice, worked around in `DropController.bindHud`): clickable rows need a real button's `.Activated` — `Frame.InputBegan` loses to the scroll gesture on mobile; and Scale-sized children measure against the *canvas*, so canvas-from-content sizing loops infinitely — pin authored scale sizes to pixel offsets first, then drive `CanvasSize` from the layout's `AbsoluteContentSize` (`AutomaticCanvasSize` is unreliable with grid layouts).
 - Use the `.luau` extension for new source files.
 
 ### Networking
@@ -109,6 +112,6 @@ Continuous per-player values (survival stats) replicate as **attributes on the `
 
 ## Current state
 
-Working: seeded terrain generation, custom rig spawning/respawning, survival stats with HUD bars, a full inventory + hotbar with drag/split/equip and Backspace drop/proximity pickup, melee weapons with pulsed hitboxes, consumables, dash movement, and seeded tree/building generation.
+Working: seeded terrain generation, custom rig spawning/respawning, survival stats with HUD bars, a full inventory + hotbar with drag/split/equip and Backspace drop/proximity pickup, melee weapons with pulsed hitboxes, consumables (hand-authored presets plus seed-generated food/drink/fruit items from mesh models), dash movement, and seeded tree/building generation.
 
 Not built yet: the seed-driven palette generation and run-modifier layers described in the overview (`ThemePalette` currently only ships a `Default` grayscale palette), enemies, and data persistence.
