@@ -3,7 +3,8 @@
 -- the swing animations at random while pulsing a Hitbox in front of the
 -- wielder's HumanoidRootPart, damaging every humanoid it touches (once per
 -- swing). The hitbox re-scans several times over the swing at the wielder's
--- current position, and displays each scan in-game.
+-- current position, and displays each scan in-game. Damage is scaled by the
+-- wielder's StatusEffects melee multiplier (Strength/Weakness) at hit time.
 --
 -- Placeholder assets for now — the Tool template defaults to
 -- ReplicatedStorage.Assets.Tools.Weapons.Sword and swings come from the
@@ -15,9 +16,16 @@
 --   local sword = CloseRangeWeapon.new()
 --   sword:GiveTo(player)
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Hitbox = require(script.Parent.Parent:WaitForChild("Combat"):WaitForChild("Hitbox"))
+
+-- Required lazily at hit time: services create weapons, so a top-level
+-- require here would be a require cycle (same trick as Consumable).
+local function getPlayerService()
+	return require(script.Parent.Parent.Parent:WaitForChild("Services"):WaitForChild("PlayerService")) :: any
+end
 
 local DEFAULT_DAMAGE = 15
 local DEFAULT_HITBOX_SIZE = Vector3.new(4, 5, 5)
@@ -186,8 +194,16 @@ function CloseRangeWeapon._onEquipped(self: CloseRangeWeapon)
 		Filter = { character },
 		Visualize = false,
 	})
+	local wielder = Players:GetPlayerFromCharacter(character)
 	hitbox.OnHit:Connect(function(_model, hitHumanoid)
-		hitHumanoid:TakeDamage(self.Damage)
+		local damage = self.Damage
+		-- Read at hit time, not equip time, so effects gained or lost
+		-- mid-swing count. Non-player wielders (future enemies) deal base damage.
+		local object = wielder and getPlayerService():GetObject(wielder)
+		if object then
+			damage *= object.StatusEffects:GetMeleeDamageMultiplier()
+		end
+		hitHumanoid:TakeDamage(damage)
 	end)
 	self._hitbox = hitbox
 end

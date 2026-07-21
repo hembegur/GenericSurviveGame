@@ -70,6 +70,7 @@ Modules are plain tables returned from the ModuleScript; state is module-level l
 
 - `Entities/Player` — wraps a `Player`, owns character spawning/respawning and survival stats.
 - `Entities/Inventory` — server-authoritative slot array, the single source of truth for items.
+- `Entities/StatusEffects` — per-player timed effects (Burning, Regeneration, Slowness, ...) from `StatusEffectConfig`; owned by `Entities/Player` (bound on spawn, cleared on death, ticked from `TickStats`), replicated as `Effect_<Name>` attributes on the Player instance. Apply with `object.StatusEffects:Apply("Burning")`.
 - `Weapons/CloseRangeWeapon`, `Consumables/Consumable` — Tool-wrapping item classes.
 - `Combat/Hitbox` — pulsed melee box that tracks a moving wielder.
 - `World/Tree`, `World/Building` — seeded procedural model generators.
@@ -84,7 +85,7 @@ Modules are plain tables returned from the ModuleScript; state is module-level l
 
 `src/shared/Modules/Game/` is config + pure logic, required by both sides:
 
-`InventoryConfig`, `ItemConfig`, `StatsConfig`, `MovementConfig`, `TerrainConfig` (tunables), `TerrainMap` (deterministic seed → height/biome math, no Instances), `ThemePalette` (color roles), `Packets` (all network schemas), `Keybind` (client-only Input Action System wrapper — it asserts `RunService:IsClient()`), `ConsumableGen` (seeded consumable stats from the `Assets.Models.Consumables` mesh names — Food restores hunger, Drink thirst, Fruit both; `load()` runs on both sides and registers the items into `ItemConfig.Items`).
+`InventoryConfig`, `ItemConfig`, `StatsConfig`, `MovementConfig`, `TerrainConfig` (tunables), `TerrainMap` (deterministic seed → height/biome math, no Instances), `ThemePalette` (color roles), `Packets` (all network schemas), `Keybind` (client-only Input Action System wrapper — it asserts `RunService:IsClient()`), `StatusEffectConfig` (status effect definitions built from four primitives: health/sec, stat-decay ×, walk-speed ×, melee-damage ×), `ConsumableGen` (seeded consumable stats from the `Assets.Models.Consumables` mesh names — Food restores hunger, Drink thirst, Fruit both; `load()` runs on both sides and registers the items into `ItemConfig.Items`).
 
 `src/shared/Hello.luau` is a leftover template file.
 
@@ -112,6 +113,6 @@ Continuous per-player values (survival stats) replicate as **attributes on the `
 
 ## Current state
 
-Working: seeded terrain generation, custom rig spawning/respawning, survival stats with HUD bars, a full inventory + hotbar with drag/split/equip and Backspace drop/proximity pickup, melee weapons with pulsed hitboxes, consumables (hand-authored presets plus seed-generated food/drink/fruit items from mesh models), dash movement, and seeded tree/building generation.
+Working: seeded terrain generation, custom rig spawning/respawning, survival stats with HUD bars, server-side status effects (nothing applies them in normal play yet, and no HUD display), a full inventory + hotbar with drag/split/equip and Backspace drop/proximity pickup, melee weapons with pulsed hitboxes, consumables (hand-authored presets plus seed-generated food/drink/fruit items from mesh models), dash movement, and seeded tree/building generation.
 
 Not built yet: the seed-driven palette generation and run-modifier layers described in the overview (`ThemePalette` currently only ships a `Default` grayscale palette), enemies, and data persistence.

@@ -9,6 +9,10 @@
 -- The spawn location is decided by the provider function passed to .new, so
 -- this class stays decoupled from terrain/services. The provider returns the
 -- ground CFrame; the rig is placed with the bottom of its bounding box there.
+--
+-- Also owns the player's StatusEffects (Entities/StatusEffects): bound to
+-- each fresh character, cleared on death, and ticked from TickStats — its
+-- StatDecayMultiplier scales survival decay here (Food Poisoning).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,6 +21,7 @@ local GameModules = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Modul
 local StatsConfig = require(GameModules:WaitForChild("StatsConfig"))
 
 local InventoryClass = require(script.Parent:WaitForChild("Inventory"))
+local StatusEffectsClass = require(script.Parent:WaitForChild("StatusEffects"))
 
 local SPAWN_CLEARANCE = 2 -- extra studs above the ground so the rig never spawns intersecting it
 
@@ -44,6 +49,7 @@ export type PlayerClass = typeof(setmetatable(
 		Character: Model?,
 		Stats: { [string]: number },
 		Inventory: InventoryClass.Inventory,
+		StatusEffects: StatusEffectsClass.StatusEffects,
 		_getSpawnCFrame: () -> CFrame,
 		_respawnScheduled: boolean,
 		_destroyed: boolean,
@@ -57,6 +63,7 @@ function PlayerClass.new(player: Player, getSpawnCFrame: () -> CFrame): PlayerCl
 		Character = nil :: Model?,
 		Stats = {} :: { [string]: number },
 		Inventory = InventoryClass.new(player),
+		StatusEffects = StatusEffectsClass.new(player),
 		_getSpawnCFrame = getSpawnCFrame,
 		_respawnScheduled = false,
 		_destroyed = false,
@@ -97,14 +104,16 @@ function PlayerClass.TickStats(self: PlayerClass, dt: number)
 	if not humanoid or humanoid.Health <= 0 then
 		return
 	end
+	local decayMultiplier = self.StatusEffects:GetStatDecayMultiplier()
 	for name, stat in StatsConfig.Survival do
-		local value = math.max(self.Stats[name] - stat.DecayPerSecond * dt, 0)
+		local value = math.max(self.Stats[name] - stat.DecayPerSecond * decayMultiplier * dt, 0)
 		self.Stats[name] = value
 		self.Player:SetAttribute(name, value)
 		if value <= 0 then
 			humanoid:TakeDamage(stat.DamagePerSecondWhenEmpty * dt)
 		end
 	end
+	self.StatusEffects:Tick(dt)
 end
 
 -- Replaces the player's character with a fresh clone of the rig, placed at
@@ -129,6 +138,7 @@ function PlayerClass.SpawnCharacter(self: PlayerClass)
 	end
 	humanoid.Health = humanoid.MaxHealth
 	self:ResetStats()
+	self.StatusEffects:SetCharacter(rig) -- clears leftovers, captures base WalkSpeed
 
 	local rootPart = rig:FindFirstChild("HumanoidRootPart")
 	if rootPart and rootPart:IsA("BasePart") then
@@ -155,6 +165,7 @@ function PlayerClass.SpawnCharacter(self: PlayerClass)
 
 	humanoid.Died:Connect(function()
 		if self.Character == rig then
+			self.StatusEffects:Clear() -- death cures everything (and stops the DoT attributes lingering)
 			self:_scheduleRespawn()
 		end
 	end)
@@ -184,6 +195,7 @@ end
 function PlayerClass.Destroy(self: PlayerClass)
 	self._destroyed = true
 	self.Inventory:Destroy()
+	self.StatusEffects:Destroy()
 	if self.Character then
 		local character = self.Character
 		self.Character = nil

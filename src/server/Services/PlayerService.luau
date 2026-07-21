@@ -78,10 +78,10 @@ local function onPlayerAdded(player: Player)
 		object.Inventory:AddItem("Sword", 1)
 		-- Two of the first generated consumable of each kind, so this run's
 		-- seeded foods can be tried before a world spawner exists.
-		local defs, order = ConsumableGen.load()
+		local _, order = ConsumableGen.load()
 		local testCount = 1
 		for _, id in order do
-			if testCount < 10 then
+			if testCount < 30 then
 				testCount += 1
 				object.Inventory:AddItem(id, 2)
 			end
@@ -96,6 +96,12 @@ local function onPlayerAdded(player: Player)
 		-- for _, name in { "Apple", "Grapes", "Cake" } do
 		-- 	Consumable.new(name):GiveTo(player)
 		-- end
+
+		-- --status effects test
+		-- object.StatusEffects:Apply("Burning")
+		-- object.StatusEffects:Apply("Regeneration")
+		-- object.StatusEffects:Apply("Bleeding", { Stacks = 3 })
+		-- object.StatusEffects:Apply("Adrenaline")
 	end
 end
 
